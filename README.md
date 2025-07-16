@@ -11,4 +11,5 @@ Extended Kalman Filter를 사용해 센서 융합함.
 
 ## result
 
-<img width="281" height="125" alt="image" src="https://github.com/user-attachments/assets/e921d412-58ae-48f0-b219-ed467aa1ea06" />
+<img width="281" height="86" alt="image" src="https://github.com/user-attachments/assets/bcb20b75-300e-4bad-ab98-033aae97d64b" />
+
