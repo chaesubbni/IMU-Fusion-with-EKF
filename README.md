@@ -27,8 +27,8 @@ Twiddle 알고리즘은 PID 제어나 칼만 필터 등의 파라미터 최적�
 시스템의 Q와 R을 보다 정밀하게 설정하기 위해, 정지 상태에서의 센서 노이즈, 움직인 후에 발생하는 동적 노이즈, 그리고 다시 원래 위치로 복귀했을 때의 편향(bias)을 반영한 노이즈까지 모두 고려해 총 오차(error)를 계산함.
 이러한 방식은 단순한 정적 오차 분석보다 실제 동작 환경을 반영한 종합적인 오차 측정이 가능하므로, 보다 현실적이고 신뢰도 높은 Q와 R 설정에 유리하다고 판단함.
 
+<img width="557" height="337" alt="image" src="https://github.com/user-attachments/assets/8e4a5708-6c38-4a4e-a622-da40db7d857e" />
 
-https://github.com/user-attachments/assets/4ff682e6-d0df-4962-b713-250645034ad1
 
 ## Twiddle test2
 
