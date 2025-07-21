@@ -47,7 +47,47 @@ Matrix<float, 2, 2> R;
 float off_psi;
 float off_theta;
 
-int mag_cnt;
+int servo_cnt;
+
+void kalman_update() {
+  // IMU 센서 읽기
+  IMU.readAcceleration(ax, ay, az);
+  IMU.readGyroscope(gx, gy, gz);
+
+  float a_psi = atan2(ax, sqrt(ay * ay + az * az));
+  float a_theta = atan2(ay, sqrt(ax * ax + az * az));
+
+  psi = x(0); theta = x(1);
+  float p = gx - x(2), q = gy - x(3), r = gz - x(4);
+  float sec2 = 1.0 / pow(cos(theta), 2);
+
+  A(0, 0) = 1 + dt * (q * cos(psi) * tan(theta) - r * sin(psi) * tan(theta));
+  A(0, 1) =     dt * (q * sin(psi) * sec2 + r * cos(psi) * sec2);
+  A(0, 2) = -dt;
+  A(1, 0) =     dt * (-q * sin(psi) - r * cos(psi));
+  A(1, 1) = 1;
+  A(1, 3) = -dt;
+
+  Vector<float, 5> xdot;
+  xdot.setZero();
+  xdot(0) = p + q * sin(psi) * tan(theta) + r * cos(psi) * tan(theta);
+  xdot(1) = q * cos(psi) - r * sin(psi);
+
+  Vector<float, 5> xp = x + xdot * dt;
+  Matrix<float, 5, 5> Pp = A * P * A.transpose() + Q;
+
+  Matrix<float, 5, 2> Ht = H.transpose();
+  Matrix<float, 2, 2> S = H * Pp * Ht + R;
+  Matrix<float, 5, 2> K = Pp * Ht * S.inverse();
+
+  Vector<float, 2> z;
+  z << a_psi - off_psi, a_theta - off_theta;
+
+  Vector<float, 2> dz = z - H * xp;
+
+  x = xp + K * dz;
+  P = Pp - K * H * Pp;
+}
 
 void setup() {
   Serial.begin(9600);
@@ -140,16 +180,16 @@ void setup() {
 
   // 프로세스 노이즈 공분산 Q
   Q.setZero();
-  Q(0, 0) = 1.2*var_gyro.x;
-  Q(1, 1) = 1.2*var_gyro.y;
-  Q(2, 2) = 1e-3;
-  Q(3, 3) = 1e-3;
-  Q(4, 4) = 1e-3;
+  Q(0, 0) = 2.003259*var_gyro.x;// 4.366773*var_gyro.x; //3.366773*var_gyro.x
+  Q(1, 1) = 1.320377*var_gyro.y;// 2.451818*var_gyro.y; //1.451817*var_gyro.y
+  Q(2, 2) = 0.001008;
+  Q(3, 3) = 0.001081;
+  Q(4, 4) = -0.000776;
 
   // 측정 노이즈 공분산 R
   R.setZero();
-  R(0, 0) = 1.2*var_acc.x;
-  R(1, 1) = 1.2*var_acc.y;
+  R(0, 0) = 2.029001*var_acc.x;
+  R(1, 1) = 4.090002*var_acc.y;
 
   A.setZero();
 
@@ -158,7 +198,7 @@ void setup() {
        0, 1, 0, 0, 0;
 
 
-  mag_cnt = 0;
+  servo_cnt = 0;
 }
 
 
@@ -167,91 +207,20 @@ void loop() {
   if (currentMillis - previousMillis >= WAIT_TIME){
     previousMillis = currentMillis;
     if (IMU.accelerationAvailable() && IMU.gyroscopeAvailable()) {
-      IMU.readAcceleration(ax, ay, az);
-      IMU.readGyroscope(gx, gy, gz);
+      kalman_update();
 
-
-      float a_psi = atan2(ax, sqrt(ay * ay + az * az));  //  * 180 / PI
-      float a_theta  = atan2(ay, sqrt(ax * ax + az * az)); //  * 180 / PI
-      
-      //float a_psi = atan2(ay/az);  //  * 180 / PI
-      //float a_theta  = atan2(ax / sqrt(ay * ay + az * az)); //  * 180 / PI
-
-      psi = x(0);
-      theta = x(1);
-
-      float p = gx - x(2);
-      float q = gy - x(3);
-      float r = gz - x(4);
-
-      float sec2 = 1.0f / pow(cos(theta), 2);
-      A(0, 0) = 1 + dt * (q * cos(psi) * tan(theta) - r * sin(psi) * tan(theta));
-      A(0, 1) =     dt * (q * sin(psi) * sec2 + r * cos(psi) * sec2);
-      A(0, 2) = -dt;
-      A(1, 0) =     dt * (-q * sin(psi) - r * cos(psi));
-      A(1, 1) = 1;
-      A(1, 3) = -dt;
-
-
-      Vector<float, 5> xdot(5);
-      xdot.setZero();
-
-      xdot(0) = p + q * sin(psi) * tan(theta) + r * cos(psi) * tan(theta);
-      xdot(1) = q * cos(psi) - r * sin(psi);
-
-      // 예측 단계
-      Vector<float, 5> xp = x + xdot * dt;
-      Matrix<float, 5, 5> Pp = A * P * A.transpose() + Q;
-
-      // 칼만 이득 계산
-      Matrix<float, 5, 2> Ht = H.transpose();
-      Matrix<float, 2, 2> S = H * Pp * Ht + R;
-      Matrix<float, 5, 2> K = Pp * Ht * S.inverse();
-
-      // 측정값과 예측값 차이
-      Vector<float, 2> z;
-      z << a_psi - off_psi, a_theta - off_theta;
-
-      Vector<float, 2> dz = z - H * xp;
-
-      // 상태 업데이트
-      x = xp + K * dz;
-
-      // 공분산 업데이트
-      P = Pp - K * H * Pp;
-
-      Serial.print("Roll (deg): ");
+      //Serial.print("Roll (deg): ");
       Serial.print(x(0) * 180.0 / PI);
-      Serial.print("    Pitch (deg): ");
+      //Serial.print("    Pitch (deg): ");
+      Serial.print(",");
       Serial.println(x(1) * 180.0 / PI);
     }
-
-    /*
-    if (mag_cnt >= 5 && IMU.magneticFieldAvailable()){
-      // yaw 계산
-      IMU.readMagneticField(mx, my, mz);
-      float Mx = mx*cos(x(2)) + mz*sin(x(2));
-      float My = mx*sin(x(1))*sin(x(2)) + my*cos(x(1)) - mz*sin(x(1))*cos(x(2));
-      phi = atan2(My, Mx);
-
-      // 이동 평균 필터 적용
-      yaw_sum -= yaw_buffer[yaw_index];        // 기존 값 제거
-      yaw_buffer[yaw_index] = phi;             // 새 값 저장
-      yaw_sum += yaw_buffer[yaw_index];        // 누적합 갱신
-
-      yaw_index = (yaw_index + 1) % 10;
-
-      phi_filtered = yaw_sum / 10;
-
-
-
-      Serial.print("Yaw (deg): ");
-      Serial.println(phi * 180.0 / PI);
-      mag_cnt = -1;
+    
+    if (servo_cnt >= 8){
+      // pid 제어.
+      servo_cnt = -1;
     }
-    */
-    //mag_cnt++; 
-  }
 
-  
+    servo_cnt++;
+  }
 }
