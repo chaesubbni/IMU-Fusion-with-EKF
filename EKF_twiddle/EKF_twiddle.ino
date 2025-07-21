@@ -9,8 +9,8 @@ using Eigen::Vector;
 
 #define WAIT_TIME 12     // How often to run the code (in milliseconds)
 
-float p[7] = {1.7, 1.2, 1e-3, 0.000910, 0.000972,1.415233, 0.7};
-float dp[7] = {0.5, 0.5, 1e-4, 1e-4, 1e-4, 0.5, 0.5};
+float p[7] = {2.003259, 1.320377, 0.001008, 0.001081, -0.000776, 2.029001, 4.090002}; // 5.893260 0.920377 0.003478 0.002810 0.000128 2.929001 2.200000 
+float dp[7] = {0.5, 0.5, 1e-4, 1e-4, 1e-4, 0.5, 0.5}; // 0.5 -> 1.0
 
 Servo servo1;
 int servo_angle = 90;  // 시작은 중앙
@@ -107,12 +107,18 @@ float measure_kalman_error(float target_deg, float target_deg2) {
   Vector<float, 200> values;
   Vector<float, 200> values2;
 
+  float target_rad = target_deg * PI / 180.0;
+  float target_rad2 = target_deg2 * PI / 180.0;
+
   while (millis() - start < 2000) {
     if (IMU.accelerationAvailable() && IMU.gyroscopeAvailable()) {
       kalman_update();  // 기존 loop()의 필터 계산을 함수로 분리
       if (count < 200){
-        values[count] = x(0);
-        values2[count] = x(1);
+        values[count] = abs(x(0) - target_rad);
+        values2[count] = abs(x(1) - target_rad2);
+      }
+      else{
+        break;
       }
       count++;
     }
@@ -127,7 +133,7 @@ float measure_kalman_error(float target_deg, float target_deg2) {
   }
   float mean_est = sum / count;
   float mean_est2 = sum2 / count;
-
+  /*
   float var = 0.0;
   float var2 = 0.0;
 
@@ -140,14 +146,9 @@ float measure_kalman_error(float target_deg, float target_deg2) {
   }
   var /= count;
   var2 /= count;
-
-  float target_rad = target_deg * PI / 180.0;
-  float target_rad2 = target_deg2 * PI / 180.0;
-
-  float bias = mean_est - target_rad;
-  float bias2 = mean_est2 - target_rad2;
-
-  return fabs(bias) + fabs(bias2) + var + var2;  // 편향 + 진동 = 총 오차
+  */
+  
+  return mean_est + mean_est2;  // 편향 + 진동 = 총 오차
 }
 
 float run_kalman_test(float p[7]) {
@@ -164,16 +165,29 @@ float run_kalman_test(float p[7]) {
 
   // 테스트 시나리오: 0도 → 30도 → 0도
   servo1.write(90);  // 90 + 30
-  delay(2000);
+  //delay(500);
   float error1 = measure_kalman_error(0.0, 0.0);
+  Serial.println("Start");
+  Serial.print("Roll (deg): ");
+  Serial.print(x(0) * 180.0 / PI);
+  Serial.print("    Pitch (deg): ");
+  Serial.println(x(1) * 180.0 / PI);
   servo1.write(120);  // 90 + 30
-  delay(2000);
-  float error2 = measure_kalman_error(30.0, 0.0);
+  delay(500);
+  //float error2 = measure_kalman_error(00.0, 30.0);
+  //Serial.print("Roll (deg): ");
+  //Serial.print(x(0) * 180.0 / PI);
+  //Serial.print("    Pitch (deg): ");
+  //Serial.println(x(1) * 180.0 / PI);
   servo1.write(90);   // 원래대로
-  delay(2000);
+  delay(500);
   float error3 = measure_kalman_error(0.0, 0.0);
+  Serial.print("Roll (deg): ");
+  Serial.print(x(0) * 180.0 / PI);
+  Serial.print("    Pitch (deg): ");
+  Serial.println(x(1) * 180.0 / PI);
 
-  return error1 + error2 + error3;
+  return error1 + error3;
 }
 
 
@@ -273,16 +287,11 @@ void setup() {
 
   // 프로세스 노이즈 공분산 Q
   Q.setZero();
-  Q(0, 0) = 1.2*var_gyro.x;
-  Q(1, 1) = 1.2*var_gyro.y;
-  Q(2, 2) = 1e-3;
-  Q(3, 3) = 1e-3;
-  Q(4, 4) = 1e-3;
+
 
   // 측정 노이즈 공분산 R
   R.setZero();
-  R(0, 0) = 1.2*var_acc.x;
-  R(1, 1) = 1.2*var_acc.y;
+
 
   A.setZero();
 
@@ -298,7 +307,7 @@ void setup() {
 
   int iteration = 0;
 
-  while ((dp[0]+dp[1]+dp[2]+dp[3]+dp[4]+dp[5]+dp[6]) > 0.01 && (iteration < 10)) {
+  while ((dp[0]+dp[1]+dp[2]+dp[3]+dp[4]+dp[5]+dp[6]) > 0.01 && (iteration < 20)) {
     for (int i = 0; i < 7; i++) {
       p[i] += dp[i];
       float err = run_kalman_test(p);
@@ -321,7 +330,7 @@ void setup() {
     }
 
     iteration++;
-    Serial.print("Best Error: "); Serial.println(best_err);
+    Serial.print("Best Error: "); Serial.println(best_err,6);
     Serial.print("Current Params: ");
     for (int i = 0; i < 7; i++) Serial.print(p[i], 6), Serial.print(" ");
     Serial.println();
