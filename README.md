@@ -35,3 +35,8 @@ Twiddle 알고리즘은 PID 제어나 칼만 필터 등의 파라미터 최적�
 ## Final test
 
 <img width="301" height="290" alt="image" src="https://github.com/user-attachments/assets/1e023041-f3ed-4c0f-988b-a762bb11f9b8" />
+
+
+## Graph
+
+https://youtu.be/PG9V5bQvgVE
